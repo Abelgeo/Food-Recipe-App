@@ -4,20 +4,39 @@ import { StatusBar } from 'expo-status-bar';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { BellIcon, MagnifyingGlassIcon } from 'react-native-heroicons/outline';
 import Categories from '../components/categories';
+import Recipes from '../components/recipes';
 import axios from 'axios';
 export default function HomeScreen() {
-  const [activeCategory, setActiveCategory] = useState('Drinks');
+  const [activeCategory, setActiveCategory] = useState('Beef');
   const [categories, setCategories] = useState([]);
+  const [meals, setMeals] = useState([]);
 
   useEffect(() => {
     getCategories();
+    getRecipes();
   }, []);
+
+  const handlechangecategory = category => {
+    getRecipes(category);
+    setActiveCategory(category);
+    setMeals([]);
+  }
 
   const getCategories = async () => {
     try {
       const response = await axios.get('https://themealdb.com/api/json/v1/1/categories.php');
       if(response && response.data) {
         setCategories(response.data.categories);
+      }
+    } catch(err) {
+      console.log('error: ', err.message);
+    }
+  }
+  const getRecipes = async (category="Beef") => {
+    try {
+      const response = await axios.get(`https://themealdb.com/api/json/v1/1/filter.php?c=${category}`);
+      if(response && response.data) {
+        setMeals(response.data.meals);
       }
     } catch(err) {
       console.log('error: ', err.message);
@@ -66,9 +85,13 @@ export default function HomeScreen() {
             <Categories 
               categories={categories} 
               activeCategory={activeCategory} 
-              setActiveCategory={setActiveCategory}
+              handlechangecategory={handlechangecategory}
             />
           )}
+        </View>
+        {/*recipes */}
+        <View style={styles.recipesContainer}>
+          <Recipes meals={meals} categories={categories}/>
         </View>
       </ScrollView>
     </View>
@@ -132,5 +155,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 8,
     borderRadius: 999
+  },
+  recipesContainer: {
+    marginHorizontal: wp(4),
+    marginTop: hp(1.5) // equivalent to space-y-3
   }
 });

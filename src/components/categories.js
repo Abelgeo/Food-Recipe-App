@@ -3,8 +3,9 @@ import React from 'react';
 import { categorydata } from '../constants';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { CachedImage } from '../helpers/image';
 
-export default function Categories({categories, activeCategory, setActiveCategory}) {
+export default function Categories({categories, activeCategory, handlechangecategory}) {
   return (
     <Animated.View entering={FadeInDown.duration(500).springify()}>
       <ScrollView 
@@ -19,7 +20,7 @@ export default function Categories({categories, activeCategory, setActiveCategor
           return (
             <TouchableOpacity 
               key={index} 
-              onPress={() => setActiveCategory(cat.strCategory)} 
+              onPress={() => handlechangecategory(cat.strCategory)} 
               style={styles.categoryButton}
             >
               <View style={[
@@ -30,6 +31,9 @@ export default function Categories({categories, activeCategory, setActiveCategor
                   source={{uri: cat.strCategoryThumb}}
                   style={styles.categoryImage}
                 />
+                
+                {/*<CachedImage uri={cat.strCategoryThumb}
+                          style={styles.categoryImage} />*/}
               </View>
               <Text style={styles.categoryText}>{cat.strCategory}</Text>
             </TouchableOpacity>

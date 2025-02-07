@@ -29,5 +29,17 @@ export const mealdata = [
     {
         name: 'Chocolate Cake',
         image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587'
+    },
+    {
+        name: 'Italian Pizza',
+        image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591'
+    },
+    {
+        name: 'Fresh Salad',
+        image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd'
+    },
+    {
+        name: 'Chocolate Cake',
+        image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587'
     }
 ]
