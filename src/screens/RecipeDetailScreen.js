@@ -8,6 +8,8 @@ import { HeartIcon, Square3Stack3DIcon } from "react-native-heroicons/solid"
 import { useNavigation } from '@react-navigation/native'
 import axios from 'axios'
 import YoutubePlayer from 'react-native-youtube-iframe';
+import YoutubeIframe from 'react-native-youtube-iframe'
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
 export default function RecipeDetailScreen(props) {
   let item = props.route.params;
@@ -17,8 +19,16 @@ export default function RecipeDetailScreen(props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (meal?.strYouTube) {
+      console.log('Video URL:', meal.strYouTube);
+      console.log('Video ID:', getYoutubeVideoId(meal.strYouTube));
+    }
+  }, [meal]);
+
+  useEffect(() => {
       getMealData(item.idMeal);
     }, []);
+  
 
   const getMealData = async (id) => {
     try {
@@ -72,7 +82,7 @@ export default function RecipeDetailScreen(props) {
       </View>
 
       {/*back-button*/}
-      <View style={{
+      <Animated.View entering={FadeIn.delay(200).duration(1000)} style={{
         width: '100%',
         position: 'absolute', 
         flexDirection: 'row',
@@ -96,7 +106,7 @@ export default function RecipeDetailScreen(props) {
         }}>
             <HeartIcon color={isFavorite ? "red" : "gray"} size={hp(3.5)} strokeWidth={4.5} />
         </TouchableOpacity>
-        </View>
+        </Animated.View>
         {/*meal description*/}
         {
   loading ? (
@@ -110,7 +120,7 @@ export default function RecipeDetailScreen(props) {
         marginTop: 32,
         justifyContent: 'space-between'
       }}>
-        <View style={{ gap: 8 }}>
+        <Animated.View entering={FadeInDown.duration(700).springify().damping(12)} style={{ gap: 8 }}>
           <Text style={{
             fontSize: hp(3),
             fontWeight: 'bold',
@@ -127,9 +137,9 @@ export default function RecipeDetailScreen(props) {
           }}>
             {meal?.strArea}
           </Text>
-        </View>
+        </Animated.View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 16 }}>
+        <Animated.View entering={FadeInDown.delay(100).duration(700).springify().damping(12)} style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 16 }}>
           {/* Timer */}
           <View style={{
             backgroundColor: '#fbbf24',
@@ -237,9 +247,9 @@ export default function RecipeDetailScreen(props) {
               <Text style={{ fontSize: hp(1.3), fontWeight: 'bold', color: '#404040' }}>Easy</Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
         {/* ingredients */}
-        <View style={{ gap: 16, marginTop: 3}}>
+        <Animated.View entering={FadeInDown.delay(200).duration(700).springify().damping(12)} style={{ gap: 16, marginTop: 3}}>
           {/* Add ingredients content here */}
           <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040' }}>
             Ingredients
@@ -261,9 +271,9 @@ export default function RecipeDetailScreen(props) {
               })
             }
           </View>
-        </View>
+        </Animated.View>
         {/* instructions */}
-        <View style={{ gap: 16, marginTop: 3}}>
+        <Animated.View entering={FadeInDown.delay(300).duration(700).springify().damping(12)} style={{ gap: 16, marginTop: 3}}>
           {/* Add instructions content here */}
           <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040' }}>
             Instructions
@@ -273,15 +283,23 @@ export default function RecipeDetailScreen(props) {
               meal?.strInstructions
             }
           </Text>
-        </View>
-        {/*recipe video*/}
+        </Animated.View>
+        {/* recipe video */}
         {
-          meal.strYouTube && (
-            <View style={{gap: 16, marginTop: 3}}>
-              <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040' }}>
+          meal?.strYouTube && (
+            <Animated.View entering={FadeInDown.delay(400).duration(700).springify().damping(12)} style={{gap: 16, marginTop: 3}}>
+              <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040'}}>
                 Recipe Video
               </Text>
-            </View>
+              <View>
+                <YoutubeIframe 
+                  videoId={getYoutubeVideoId(meal.strYouTube)}  // Remove comment and use the function
+                  height={hp(30)}
+                  play={false}
+                  onError={(error) => console.log(error)}
+                />
+              </View>
+            </Animated.View>
           )
         }
       </View>
