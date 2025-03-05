@@ -98,46 +98,6 @@ export default function RecipeDetailScreen(props) {
         }}>
             <ChevronLeftIcon color='#fbbf24' size={hp(3.5)} strokeWidth={4.5} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setIsFavorite(!isFavorite)} style={{
-            padding: 8,
-            borderRadius: 9999,
-            marginRight: 20,
-            backgroundColor: "white"
-        }}>
-            <HeartIcon color={isFavorite ? "red" : "gray"} size={hp(3.5)} strokeWidth={4.5} />
-        </TouchableOpacity>
-        </Animated.View>
-        {/*meal description*/}
-        {
-  loading ? (
-    <View style={{ alignItems: 'center', marginTop: 64 }}>
-      <ActivityIndicator size="large" color="#fbbf24" />
-    </View>
-  ) : (
-    <>
-      <View style={{
-        paddingHorizontal: 16,
-        marginTop: 32,
-        justifyContent: 'space-between'
-      }}>
-        <Animated.View entering={FadeInDown.duration(700).springify().damping(12)} style={{ gap: 8 }}>
-          <Text style={{
-            fontSize: hp(3),
-            fontWeight: 'bold',
-            color: '#404040',
-            flex: 1
-          }}>
-            {meal?.strMeal}
-          </Text>
-          <Text style={{
-            fontSize: hp(2),
-            fontWeight: '500',
-            color: '#737373',
-            flex: 1
-          }}>
-            {meal?.strArea}
-          </Text>
-        </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(100).duration(700).springify().damping(12)} style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 16 }}>
           {/* Timer */}
