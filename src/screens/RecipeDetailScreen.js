@@ -1,273 +1,292 @@
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native'
-import React, { useState, useEffect } from 'react'
-import { StatusBar } from 'expo-status-bar'
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen'
-import { CachedImage } from '../helpers/image'
-import { ChevronLeftIcon, ClockIcon, UsersIcon, FireIcon } from "react-native-heroicons/outline"
-import { HeartIcon, Square3Stack3DIcon } from "react-native-heroicons/solid"
-import { useNavigation } from '@react-navigation/native'
-import axios from 'axios'
-import YoutubePlayer from 'react-native-youtube-iframe';
-import YoutubeIframe from 'react-native-youtube-iframe'
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
+import axios from 'axios';
+import { ChevronLeftIcon } from 'react-native-heroicons/outline';
 
-export default function RecipeDetailScreen(props) {
-  let item = props.route.params;
-  const [isFavorite, setIsFavorite] = useState(false);
-  const navigation= useNavigation();
-  const [meal, setMeal] = useState(null);
+export default function RecipeDetailScreen({ route, navigation }) {
+  const { meal } = route.params; // Get meal data from navigation
+  const [recipeDetails, setRecipeDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const SPOONACULAR_API_KEY = '8886d224ef824a72895299629e4bd955'; // Ensure this is your valid API key
 
   useEffect(() => {
-    if (meal?.strYouTube) {
-      console.log('Video URL:', meal.strYouTube);
-      console.log('Video ID:', getYoutubeVideoId(meal.strYouTube));
-    }
-  }, [meal]);
+    getRecipeDetails();
+  }, [meal.idMeal]);
 
-  useEffect(() => {
-      getMealData(item.idMeal);
-    }, []);
-  
-
-  const getMealData = async (id) => {
+  const getRecipeDetails = async () => {
     try {
-      const response = await axios.get(`https://themealdb.com/api/json/v1/1/lookup.php?i=${id}`);
-      if(response && response.data) {
-        setMeal(response.data.meals[0]);
-        setLoading(false);
-      }
-    } catch(err) {
-      console.log('error: ', err.message);
-    }
-  }
+      setLoading(true);
+      setError(null);
 
-  const ingredientsIndexes = (meal) => {
-    if(!meal) return [];
-    let indexes = [];
-    for(let i=1; i<=20; i++) {
-      if(meal['strIngredient'+i]){
-        indexes.push(i);
+      if (meal.isSpoonacular) {
+        console.log('Fetching Spoonacular recipe with ID:', meal.idMeal);
+        const response = await axios.get(
+          `https://api.spoonacular.com/recipes/${meal.idMeal}/information?apiKey=${SPOONACULAR_API_KEY}&includeNutrition=true`
+        );
+
+        console.log('Spoonacular API Response:', response.data);
+
+        if (response?.data) {
+          setRecipeDetails({
+            id: response.data.id,
+            strMeal: meal.strMeal || response.data.title,
+            strMealThumb: meal.strMealThumb || response.data.image,
+            strCategory: 'Spoonacular Recipe',
+            strArea: 'International',
+            strInstructions: response.data.instructions || 'Instructions not available for this recipe.',
+            extendedIngredients: response.data.extendedIngredients || [],
+            isSpoonacular: true,
+            nutrition: response.data.nutrition || {}, // Store nutritional information
+            servings: response.data.servings || 1, // Store servings for nutrition context
+          });
+        } else {
+          setError('Recipe details not found');
+        }
+      } else {
+        console.log('Fetching MealDB recipe with ID:', meal.idMeal);
+        const response = await axios.get(
+          `https://themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`
+        );
+
+        if (response?.data?.meals?.[0]) {
+          setRecipeDetails(response.data.meals[0]);
+        } else {
+          setError('Recipe details not found');
+        }
       }
+    } catch (err) {
+      console.log('Error fetching recipe details:', err.message, err.response?.data);
+      setError('Failed to load recipe details: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-    return indexes;
-  }
-  const getYoutubeVideoId = (url) => {
-    if (!url) return null;
-    const regex = /[?&]v=([^&]+)/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
   };
 
-  return (
-    <ScrollView
-      style={{backgroundColor: 'white', flex: 1}}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{paddingBottom: 30}}
-    >
-      <StatusBar style="light"/>
-      {/* Recipe image */}
-      <View style={{flexDirection: 'row', justifyContent: 'center'}}>
-        <CachedImage 
-          uri={item.strMealThumb} 
-          style={{
-            width: wp(98),
-            height: hp(50),
-            borderRadius: 50,
-            borderBottomLeftRadius: 40,
-            borderBottomRightRadius: 40,
-            marginTop: 4
-          }}
-        />
-      </View>
+  // Parse Spoonacular instructions into an array of steps
+  const parseInstructions = (instructions) => {
+    if (!instructions) return [];
 
-      {/*back-button*/}
-      <Animated.View entering={FadeIn.delay(200).duration(1000)} style={{
-        width: '100%',
-        position: 'absolute', 
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: 56 // equivalent to pt-14
-        }}>
-        <TouchableOpacity onPress={()=> navigation.goBack()} style={{
+    // Remove HTML tags and split into steps
+    const cleanedInstructions = instructions.replace(/<\/?ol>|<\/?li>/g, '').split('<li>').filter(step => step.trim() !== '');
+    return cleanedInstructions.map(step => step.trim());
+  };
+
+  // Extract and format ingredients with proper units
+  const getIngredients = () => {
+    if (!recipeDetails) return [];
+
+    if (recipeDetails.isSpoonacular) {
+      // Handle Spoonacular ingredients (extendedIngredients array)
+      console.log('Spoonacular Ingredients:', recipeDetails.extendedIngredients);
+      return (recipeDetails.extendedIngredients || []).map(ingredient => {
+        const amount = ingredient.measures?.us?.amount || ingredient.measures?.metric?.amount || '';
+        const unit = ingredient.measures?.us?.unit || ingredient.measures?.metric?.unit || '';
+        const name = ingredient.name || '';
+        const original = ingredient.original || '';
+
+        // Try to parse the original string for unit and amount if unit is missing
+        let formattedIngredient = '';
+        if (unit) {
+          // Use amount, unit, and name if unit is provided
+          formattedIngredient = `${amount} ${unit} ${name}`.trim();
+        } else if (original) {
+          // Fall back to parsing the original string (e.g., "2 teaspoons curry powder")
+          const match = original.match(/(\d+\.?\d*)\s*(\w+)\s*(.*)/);
+          if (match) {
+            const originalAmount = match[1];
+            const originalUnit = match[2];
+            const originalName = match[3] || name;
+            formattedIngredient = `${originalAmount} ${originalUnit} ${originalName}`.trim();
+          } else {
+            // If no match, use amount and name with no unit
+            formattedIngredient = `${amount} ${name}`.trim();
+          }
+        } else {
+          // Last resort: use amount and name with no unit
+          formattedIngredient = `${amount} ${name}`.trim();
+        }
+
+        console.log('Formatted Ingredient:', formattedIngredient);
+        return formattedIngredient;
+      }).filter(ingredient => ingredient !== '') || [];
+    } else {
+      // Handle MealDB ingredients
+      const ingredients = [];
+      for (let i = 1; i <= 20; i++) {
+        const ingredient = recipeDetails[`strIngredient${i}`];
+        const measure = recipeDetails[`strMeasure${i}`];
+        if (ingredient && ingredient.trim() !== '') {
+          const formattedIngredient = `${measure || ''} ${ingredient}`.trim();
+          ingredients.push(formattedIngredient);
+        }
+      }
+      return ingredients;
+    }
+  };
+
+  // Format nutritional information for display
+  const getNutritionInfo = () => {
+    if (!recipeDetails?.nutrition || !recipeDetails.nutrition.nutrients) return null;
+
+    const nutrients = recipeDetails.nutrition.nutrients.slice(0, 4); // Show top 4 nutrients for brevity (e.g., calories, protein, fat, carbs)
+    return nutrients.map(nutrient => ({
+      name: nutrient.name,
+      amount: nutrient.amount,
+      unit: nutrient.unit,
+    }));
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#f59e0b" />
+        <Text style={styles.loadingText}>Loading recipe details...</Text>
+      </View>
+    );
+  }
+
+  if (error || !recipeDetails) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error || 'Failed to load recipe'}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={getRecipeDetails}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style='dark' />
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContainer}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{
+            position: 'absolute',
+            top: hp(5),
+            left: wp(4),
+            zIndex: 1,
+            backgroundColor: 'white',
             padding: 8,
-            borderRadius: 9999,
-            marginLeft: 20,
-            backgroundColor: 'white'
-        }}>
-            <ChevronLeftIcon color='#fbbf24' size={hp(3.5)} strokeWidth={4.5} />
+            borderRadius: 999,
+          }}
+        >
+          <ChevronLeftIcon size={hp(3.5)} color="#f59e0b" />
         </TouchableOpacity>
 
-        <Animated.View entering={FadeInDown.delay(100).duration(700).springify().damping(12)} style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 16 }}>
-          {/* Timer */}
-          <View style={{
-            backgroundColor: '#fbbf24',
-            borderRadius: 9999,
-            padding: 8,
-            alignItems: 'center'
-          }}>
-            <View style={{
-              height: hp(6.5),
-              width: hp(6.5),
-              backgroundColor: 'white',
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <ClockIcon size={hp(4)} strokeWidth={2.5} color="#525252" />
-            </View>
-            <View style={{
-              alignItems: 'center',
-              paddingVertical: 8,
-              gap: 4
-            }}>
-              <Text style={{ fontSize: hp(2), fontWeight: 'bold', color: '#404040' }}>35</Text>
-              <Text style={{ fontSize: hp(1.3), fontWeight: 'bold', color: '#404040' }}>Mins</Text>
-            </View>
-          </View>
+        <Image 
+          source={{ uri: recipeDetails.strMealThumb }} 
+          style={styles.recipeImage} 
+        />
 
-          {/* Servings */}
-          <View style={{
-            backgroundColor: '#fbbf24',
-            borderRadius: 9999,
-            padding: 8,
-            alignItems: 'center'
+        <View style={{ padding: wp(4) }}>
+          <Text style={{ 
+            fontSize: hp(3), 
+            fontWeight: 'bold', 
+            color: '#333',
+            marginBottom: hp(2)
           }}>
-            <View style={{
-              height: hp(6.5),
-              width: hp(6.5),
-              backgroundColor: 'white',
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <UsersIcon size={hp(4)} strokeWidth={2.5} color="#525252" />
-            </View>
-            <View style={{
-              alignItems: 'center',
-              paddingVertical: 8,
-              gap: 4
-            }}>
-              <Text style={{ fontSize: hp(2), fontWeight: 'bold', color: '#404040' }}>03</Text>
-              <Text style={{ fontSize: hp(1.3), fontWeight: 'bold', color: '#404040' }}>Servings</Text>
-            </View>
-          </View>
+            {recipeDetails.strMeal}
+          </Text>
 
-          {/* Calories */}
-          <View style={{
-            backgroundColor: '#fbbf24',
-            borderRadius: 9999,
-            padding: 8,
-            alignItems: 'center'
-          }}>
-            <View style={{
-              height: hp(6.5),
-              width: hp(6.5),
-              backgroundColor: 'white',
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <FireIcon size={hp(4)} strokeWidth={2.5} color="#525252" />
-            </View>
-            <View style={{
-              alignItems: 'center',
-              paddingVertical: 8,
-              gap: 4
-            }}>
-              <Text style={{ fontSize: hp(2), fontWeight: 'bold', color: '#404040' }}>135</Text>
-              <Text style={{ fontSize: hp(1.3), fontWeight: 'bold', color: '#404040' }}>Cal</Text>
-            </View>
-          </View>
+          <Text style={{ fontSize: hp(2), color: '#666', marginBottom: hp(2) }}>
+            {recipeDetails.strCategory} • {recipeDetails.strArea}
+          </Text>
 
-          {/* Difficulty */}
-          <View style={{
-            backgroundColor: '#fbbf24',
-            borderRadius: 9999,
-            padding: 8,
-            alignItems: 'center'
-          }}>
-            <View style={{
-              height: hp(6.5),
-              width: hp(6.5),
-              backgroundColor: 'white',
-              borderRadius: 9999,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Square3Stack3DIcon size={hp(4)} strokeWidth={2.5} color="#525252" />
-            </View>
-            <View style={{
-              alignItems: 'center',
-              paddingVertical: 8,
-              gap: 4
-            }}>
-              <Text style={{ fontSize: hp(2), fontWeight: 'bold', color: '#404040' }}></Text>
-              <Text style={{ fontSize: hp(1.3), fontWeight: 'bold', color: '#404040' }}>Easy</Text>
-            </View>
-          </View>
-        </Animated.View>
-        {/* ingredients */}
-        <Animated.View entering={FadeInDown.delay(200).duration(700).springify().damping(12)} style={{ gap: 16, marginTop: 3}}>
-          {/* Add ingredients content here */}
-          <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040' }}>
-            Ingredients
+          <Text style={{ fontSize: hp(2.2), fontWeight: 'bold', marginBottom: hp(1) }}>
+            Ingredients:
           </Text>
-          <View style={{ gap: 4, marginLeft: 3 }}>
-            {
-              ingredientsIndexes(meal).map(i=>{
-                return (
-                  <View key={i} style={{flexDirection: 'row', gap: 16}}>
-                    <View style={{height: hp(1.5), width: hp(1.5), backgroundColor: '#fcd34d',
-              borderRadius: 9999,}}>
-              </View>
-              <View style={{flexDirection: 'row', gap: 4}}>
-              <Text style={{fontWeight: '900', color: '#525252', fontSize: hp(1.7)}}>{meal['strMeasure'+i]}</Text>
-                  <Text style={{fontWeight: '500', color: '#525252', fontSize: hp(1.7)}}>{meal['strIngredient'+i]}</Text>
-                </View>
-                  </View>
-                )
-              })
-            }
-          </View>
-        </Animated.View>
-        {/* instructions */}
-        <Animated.View entering={FadeInDown.delay(300).duration(700).springify().damping(12)} style={{ gap: 16, marginTop: 3}}>
-          {/* Add instructions content here */}
-          <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040' }}>
-            Instructions
+          {getIngredients().map((ingredient, index) => (
+            <Text key={index} style={{ fontSize: hp(2), color: '#666', lineHeight: hp(3) }}>
+              {ingredient}
+            </Text>
+          ))}
+
+          <Text style={{ fontSize: hp(2.2), fontWeight: 'bold', marginTop: hp(2), marginBottom: hp(1) }}>
+            Instructions:
           </Text>
-          <Text style={{fontSize: hp(1.6), color: '#404040'}}>
-            {
-              meal?.strInstructions
-            }
-          </Text>
-        </Animated.View>
-        {/* recipe video */}
-        {
-          meal?.strYouTube && (
-            <Animated.View entering={FadeInDown.delay(400).duration(700).springify().damping(12)} style={{gap: 16, marginTop: 3}}>
-              <Text style={{fontSize: hp(2.5), fontWeight: 'bold', color: '#404040'}}>
-                Recipe Video
+          {parseInstructions(recipeDetails.strInstructions).map((step, index) => (
+            <Text key={index} style={{ fontSize: hp(2), color: '#666', lineHeight: hp(3) }}>
+              {index + 1}. {step}
+            </Text>
+          ))}
+
+          {/* Nutritional Information */}
+          {recipeDetails.isSpoonacular && recipeDetails.nutrition && (
+            <View style={{ marginTop: hp(2) }}>
+              <Text style={{ fontSize: hp(2.2), fontWeight: 'bold', marginBottom: hp(1) }}>
+                Nutrition (per serving):
               </Text>
-              <View>
-                <YoutubeIframe 
-                  videoId={getYoutubeVideoId(meal.strYouTube)}  // Remove comment and use the function
-                  height={hp(30)}
-                  play={false}
-                  onError={(error) => console.log(error)}
-                />
-              </View>
-            </Animated.View>
-          )
-        }
-      </View>
-    </>
-  )
+              {getNutritionInfo()?.map((nutrient, index) => (
+                <Text key={index} style={{ fontSize: hp(2), color: '#666', lineHeight: hp(3) }}>
+                  {nutrient.name}: {nutrient.amount} {nutrient.unit}
+                </Text>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
 }
 
-
-    </ScrollView>
-  )
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff'
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff'
+  },
+  loadingText: {
+    marginTop: hp(2),
+    fontSize: hp(2),
+    color: '#666'
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: wp(4)
+  },
+  errorText: {
+    fontSize: hp(2),
+    color: '#ef4444',
+    textAlign: 'center',
+    marginBottom: hp(2)
+  },
+  retryButton: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: wp(6),
+    paddingVertical: hp(1.5),
+    borderRadius: hp(1.5)
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: hp(2),
+    fontWeight: '600'
+  },
+  scrollContainer: {
+    paddingBottom: 50,
+  },
+  recipeImage: {
+    width: wp(100),
+    height: hp(30),
+    borderRadius: 10,
+  },
+});

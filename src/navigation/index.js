@@ -7,16 +7,31 @@ import RecipeDetailScreen from '../screens/RecipeDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
-function AppNavigation(){
-    return (
-        <NavigationContainer>
-        <Stack.Navigator initialRouteName='Welcome' screenOptions={{headerShown: false}}>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Welcome" component={WelcomeScreen} />
-            <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
-        </Stack.Navigator>
-        </NavigationContainer>
-    );
-}
+const AppNavigation = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator 
+        initialRouteName='Welcome' 
+        screenOptions={{headerShown: false}}
+      >
+        <Stack.Screen 
+          name="Home" 
+          component={HomeScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="Welcome" 
+          component={WelcomeScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="RecipeDetail" 
+          component={RecipeDetailScreen} 
+          options={{ headerShown: false }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
 
 export default AppNavigation;
