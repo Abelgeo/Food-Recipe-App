@@ -4,31 +4,45 @@ import { StatusBar } from 'expo-status-bar';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import axios from 'axios';
 import { ChevronLeftIcon } from 'react-native-heroicons/outline';
+import { AirbnbRating } from 'react-native-ratings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RecipeDetailScreen({ route, navigation }) {
-  const { meal } = route.params; // Get meal data from navigation
+  const { meal } = route.params;
   const [recipeDetails, setRecipeDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userRating, setUserRating] = useState(null);
+  const [isRatingLoading, setIsRatingLoading] = useState(false);
+  const [averageRating, setAverageRating] = useState(0);
+  const [ratingCount, setRatingCount] = useState(0);
+  const [isRecipeReady, setIsRecipeReady] = useState(false);
 
-  const SPOONACULAR_API_KEY = '8886d224ef824a72895299629e4bd955'; // Ensure this is your valid API key
+  const SPOONACULAR_API_KEY = '8886d224ef824a72895299629e4bd955';
 
   useEffect(() => {
     getRecipeDetails();
+    // Clean up any existing undefined ratings
+    cleanUpUndefinedRatings();
   }, [meal.idMeal]);
+
+  useEffect(() => {
+    if (recipeDetails?.id) {
+      loadSavedRating();
+      fetchAverageRating();
+    }
+  }, [recipeDetails?.id]);
 
   const getRecipeDetails = async () => {
     try {
       setLoading(true);
       setError(null);
+      setIsRecipeReady(false);
 
       if (meal.isSpoonacular) {
-        console.log('Fetching Spoonacular recipe with ID:', meal.idMeal);
         const response = await axios.get(
           `https://api.spoonacular.com/recipes/${meal.idMeal}/information?apiKey=${SPOONACULAR_API_KEY}&includeNutrition=true`
         );
-
-        console.log('Spoonacular API Response:', response.data);
 
         if (response?.data) {
           setRecipeDetails({
@@ -40,99 +54,142 @@ export default function RecipeDetailScreen({ route, navigation }) {
             strInstructions: response.data.instructions || 'Instructions not available for this recipe.',
             extendedIngredients: response.data.extendedIngredients || [],
             isSpoonacular: true,
-            nutrition: response.data.nutrition || {}, // Store nutritional information
-            servings: response.data.servings || 1, // Store servings for nutrition context
+            nutrition: response.data.nutrition || {},
+            servings: response.data.servings || 1,
           });
+          setIsRecipeReady(true);
         } else {
           setError('Recipe details not found');
         }
       } else {
-        console.log('Fetching MealDB recipe with ID:', meal.idMeal);
         const response = await axios.get(
           `https://themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`
         );
 
         if (response?.data?.meals?.[0]) {
           setRecipeDetails(response.data.meals[0]);
+          setIsRecipeReady(true);
         } else {
           setError('Recipe details not found');
         }
       }
     } catch (err) {
-      console.log('Error fetching recipe details:', err.message, err.response?.data);
+      console.log('Error fetching recipe details:', err.message);
       setError('Failed to load recipe details: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Parse Spoonacular instructions into an array of steps
+  const loadSavedRating = async () => {
+    try {
+      setIsRatingLoading(true);
+      const savedRating = await AsyncStorage.getItem(`recipe_rating_${recipeDetails.id}`);
+      if (savedRating) {
+        setUserRating(parseFloat(savedRating));
+      }
+    } catch (error) {
+      console.error('Error loading rating:', error);
+    } finally {
+      setIsRatingLoading(false);
+    }
+  };
+
+  const saveRating = async (value) => {
+    try {
+      if (!recipeDetails?.id) {
+        console.warn('Attempted to save rating before recipe ID was available');
+        return;
+      }
+
+      setIsRatingLoading(true);
+      await AsyncStorage.setItem(`recipe_rating_${recipeDetails.id}`, value.toString());
+      setUserRating(value);
+      console.log(`Rating ${value} saved for recipe ${recipeDetails.id}`);
+      
+      // In a real app, you would also send to your backend here
+    } catch (error) {
+      console.error('Error saving rating:', error);
+    } finally {
+      setIsRatingLoading(false);
+    }
+  };
+
+  const cleanUpUndefinedRatings = async () => {
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const undefinedKeys = allKeys.filter(key => 
+        key.startsWith('recipe_rating_') && key.includes('undefined')
+      );
+      
+      if (undefinedKeys.length > 0) {
+        await AsyncStorage.multiRemove(undefinedKeys);
+        console.log(`Cleaned up ${undefinedKeys.length} undefined ratings`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up ratings:', error);
+    }
+  };
+
+  const fetchAverageRating = async () => {
+    try {
+      // Simulate API call with mock data
+      setTimeout(() => {
+        setAverageRating(4.2);
+        setRatingCount(15);
+      }, 500);
+    } catch (error) {
+      console.error('Error fetching ratings:', error);
+    }
+  };
+
   const parseInstructions = (instructions) => {
     if (!instructions) return [];
-
-    // Remove HTML tags and split into steps
     const cleanedInstructions = instructions.replace(/<\/?ol>|<\/?li>/g, '').split('<li>').filter(step => step.trim() !== '');
     return cleanedInstructions.map(step => step.trim());
   };
 
-  // Extract and format ingredients with proper units
   const getIngredients = () => {
     if (!recipeDetails) return [];
 
     if (recipeDetails.isSpoonacular) {
-      // Handle Spoonacular ingredients (extendedIngredients array)
-      console.log('Spoonacular Ingredients:', recipeDetails.extendedIngredients);
       return (recipeDetails.extendedIngredients || []).map(ingredient => {
         const amount = ingredient.measures?.us?.amount || ingredient.measures?.metric?.amount || '';
         const unit = ingredient.measures?.us?.unit || ingredient.measures?.metric?.unit || '';
         const name = ingredient.name || '';
         const original = ingredient.original || '';
 
-        // Try to parse the original string for unit and amount if unit is missing
         let formattedIngredient = '';
         if (unit) {
-          // Use amount, unit, and name if unit is provided
           formattedIngredient = `${amount} ${unit} ${name}`.trim();
         } else if (original) {
-          // Fall back to parsing the original string (e.g., "2 teaspoons curry powder")
           const match = original.match(/(\d+\.?\d*)\s*(\w+)\s*(.*)/);
           if (match) {
-            const originalAmount = match[1];
-            const originalUnit = match[2];
-            const originalName = match[3] || name;
-            formattedIngredient = `${originalAmount} ${originalUnit} ${originalName}`.trim();
+            formattedIngredient = `${match[1]} ${match[2]} ${match[3] || name}`.trim();
           } else {
-            // If no match, use amount and name with no unit
             formattedIngredient = `${amount} ${name}`.trim();
           }
         } else {
-          // Last resort: use amount and name with no unit
           formattedIngredient = `${amount} ${name}`.trim();
         }
-
-        console.log('Formatted Ingredient:', formattedIngredient);
         return formattedIngredient;
       }).filter(ingredient => ingredient !== '') || [];
     } else {
-      // Handle MealDB ingredients
       const ingredients = [];
       for (let i = 1; i <= 20; i++) {
         const ingredient = recipeDetails[`strIngredient${i}`];
         const measure = recipeDetails[`strMeasure${i}`];
         if (ingredient && ingredient.trim() !== '') {
-          const formattedIngredient = `${measure || ''} ${ingredient}`.trim();
-          ingredients.push(formattedIngredient);
+          ingredients.push(`${measure || ''} ${ingredient}`.trim());
         }
       }
       return ingredients;
     }
   };
 
-  // Format nutritional information for display
   const getNutritionInfo = () => {
     if (!recipeDetails?.nutrition || !recipeDetails.nutrition.nutrients) return null;
-
-    const nutrients = recipeDetails.nutrition.nutrients.slice(0, 4); // Show top 4 nutrients for brevity (e.g., calories, protein, fat, carbs)
+    const nutrients = recipeDetails.nutrition.nutrients.slice(0, 4);
     return nutrients.map(nutrient => ({
       name: nutrient.name,
       amount: nutrient.amount,
@@ -143,7 +200,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#f59e0b" />
+        <ActivityIndicator size="large" color="#ef4444" />
         <Text style={styles.loadingText}>Loading recipe details...</Text>
       </View>
     );
@@ -172,17 +229,9 @@ export default function RecipeDetailScreen({ route, navigation }) {
       >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={{
-            position: 'absolute',
-            top: hp(5),
-            left: wp(4),
-            zIndex: 1,
-            backgroundColor: 'white',
-            padding: 8,
-            borderRadius: 999,
-          }}
+          style={styles.backButton}
         >
-          <ChevronLeftIcon size={hp(3.5)} color="#f59e0b" />
+          <ChevronLeftIcon size={hp(3.5)} color="#ef4444" />
         </TouchableOpacity>
 
         <Image 
@@ -190,46 +239,82 @@ export default function RecipeDetailScreen({ route, navigation }) {
           style={styles.recipeImage} 
         />
 
-        <View style={{ padding: wp(4) }}>
-          <Text style={{ 
-            fontSize: hp(3), 
-            fontWeight: 'bold', 
-            color: '#333',
-            marginBottom: hp(2)
-          }}>
+        <View style={styles.contentContainer}>
+          <Text style={styles.recipeTitle}>
             {recipeDetails.strMeal}
           </Text>
 
-          <Text style={{ fontSize: hp(2), color: '#666', marginBottom: hp(2) }}>
+          <Text style={styles.recipeMeta}>
             {recipeDetails.strCategory} • {recipeDetails.strArea}
           </Text>
 
-          <Text style={{ fontSize: hp(2.2), fontWeight: 'bold', marginBottom: hp(1) }}>
+          {/* Ratings Section */}
+          <View style={styles.ratingContainer}>
+            <Text style={styles.sectionTitle}>
+              Ratings
+            </Text>
+            
+            {ratingCount > 0 && (
+              <View style={styles.averageRatingContainer}>
+                <AirbnbRating
+                  count={5}
+                  defaultRating={averageRating}
+                  size={hp(2.5)}
+                  showRating={false}
+                  isDisabled={true}
+                  selectedColor="#ef4444"
+                  starContainerStyle={styles.averageRatingStars}
+                />
+                <Text style={styles.averageRatingText}>
+                  ({averageRating.toFixed(1)}) from {ratingCount} rating{ratingCount !== 1 ? 's' : ''}
+                </Text>
+              </View>
+            )}
+            
+            <Text style={styles.ratingPrompt}>
+              {userRating ? 'Your Rating:' : 'Rate this recipe:'}
+            </Text>
+            
+            {isRatingLoading ? (
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <AirbnbRating
+                count={5}
+                reviews={["Terrible", "Bad", "OK", "Good", "Excellent"]}
+                defaultRating={userRating || 0}
+                size={hp(3.5)}
+                onFinishRating={saveRating}
+                selectedColor="#ef4444"
+                isDisabled={!isRecipeReady}
+              />
+            )}
+          </View>
+
+          <Text style={styles.sectionTitle}>
             Ingredients:
           </Text>
           {getIngredients().map((ingredient, index) => (
-            <Text key={index} style={{ fontSize: hp(2), color: '#666', lineHeight: hp(3) }}>
-              {ingredient}
+            <Text key={index} style={styles.ingredientText}>
+              • {ingredient}
             </Text>
           ))}
 
-          <Text style={{ fontSize: hp(2.2), fontWeight: 'bold', marginTop: hp(2), marginBottom: hp(1) }}>
+          <Text style={styles.sectionTitle}>
             Instructions:
           </Text>
           {parseInstructions(recipeDetails.strInstructions).map((step, index) => (
-            <Text key={index} style={{ fontSize: hp(2), color: '#666', lineHeight: hp(3) }}>
+            <Text key={index} style={styles.instructionText}>
               {index + 1}. {step}
             </Text>
           ))}
 
-          {/* Nutritional Information */}
           {recipeDetails.isSpoonacular && recipeDetails.nutrition && (
-            <View style={{ marginTop: hp(2) }}>
-              <Text style={{ fontSize: hp(2.2), fontWeight: 'bold', marginBottom: hp(1) }}>
+            <View style={styles.nutritionContainer}>
+              <Text style={styles.sectionTitle}>
                 Nutrition (per serving):
               </Text>
               {getNutritionInfo()?.map((nutrient, index) => (
-                <Text key={index} style={{ fontSize: hp(2), color: '#666', lineHeight: hp(3) }}>
+                <Text key={index} style={styles.nutritionText}>
                   {nutrient.name}: {nutrient.amount} {nutrient.unit}
                 </Text>
               ))}
@@ -271,7 +356,7 @@ const styles = StyleSheet.create({
     marginBottom: hp(2)
   },
   retryButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#ef4444',
     paddingHorizontal: wp(6),
     paddingVertical: hp(1.5),
     borderRadius: hp(1.5)
@@ -284,9 +369,80 @@ const styles = StyleSheet.create({
   scrollContainer: {
     paddingBottom: 50,
   },
+  backButton: {
+    position: 'absolute',
+    top: hp(5),
+    left: wp(4),
+    zIndex: 1,
+    backgroundColor: 'white',
+    padding: 8,
+    borderRadius: 999,
+  },
   recipeImage: {
     width: wp(100),
     height: hp(30),
     borderRadius: 10,
   },
+  contentContainer: {
+    padding: wp(4)
+  },
+  recipeTitle: {
+    fontSize: hp(3),
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: hp(2)
+  },
+  recipeMeta: {
+    fontSize: hp(2),
+    color: '#666',
+    marginBottom: hp(2)
+  },
+  sectionTitle: {
+    fontSize: hp(2.2),
+    fontWeight: 'bold',
+    marginBottom: hp(1)
+  },
+  ingredientText: {
+    fontSize: hp(2),
+    color: '#666',
+    lineHeight: hp(3),
+    marginLeft: wp(2)
+  },
+  instructionText: {
+    fontSize: hp(2),
+    color: '#666',
+    lineHeight: hp(3),
+    marginBottom: hp(1)
+  },
+  nutritionContainer: {
+    marginTop: hp(2)
+  },
+  nutritionText: {
+    fontSize: hp(2),
+    color: '#666',
+    lineHeight: hp(3)
+  },
+  ratingContainer: {
+    marginTop: hp(2),
+    padding: wp(4),
+    backgroundColor: '#f8f8f8',
+    borderRadius: hp(1),
+    marginBottom: hp(2)
+  },
+  averageRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: hp(1)
+  },
+  averageRatingStars: {
+    marginRight: wp(2)
+  },
+  averageRatingText: {
+    fontSize: hp(2),
+    color: '#666'
+  },
+  ratingPrompt: {
+    fontSize: hp(2),
+    marginBottom: hp(1)
+  }
 });
