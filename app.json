@@ -19,10 +19,25 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.foodicafe.app"  
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json",
+            "packageName": "com.foodicafe.app"
+          }
+        }
+      ],
+      [
+        "@react-native-firebase/auth"
+      ]
+    ]
   }
 }

@@ -4,36 +4,43 @@ import { StatusBar } from 'expo-status-bar';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import Animated, { useSharedValue, withSpring } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../contexts/authContext';
 
 export default function WelcomeScreen() {
     const ring1padding = useSharedValue(0);
     const ring2padding = useSharedValue(0);
-
     const navigation = useNavigation();
+    const { userLoggedIn, loading } = useAuth();
 
     useEffect(() => {
         ring1padding.value = 0;
         ring2padding.value = 0;
         setTimeout(() => ring1padding.value = withSpring(ring1padding.value + hp(5)), 100);
         setTimeout(() => ring2padding.value = withSpring(ring2padding.value + hp(5.5)), 300);
- // Navigate to Home after animation
-        setTimeout(() => navigation.navigate('Home'), 2500);
-    }, []);
+
+        if (!loading) {
+            setTimeout(() => {
+                if (userLoggedIn) {
+                    navigation.replace('Home');
+                } else {
+                    navigation.replace('Login');
+                }
+            }, 2500);
+        }
+    }, [userLoggedIn, loading, navigation]);
 
     return (
         <View style={styles.container}>
             <StatusBar style='light' />
-            {/* logo image with rings*/}
             <Animated.View style={[styles.logoOuterContainer, { padding: ring2padding }]}>
                 <Animated.View style={[styles.logoInnerContainer, { padding: ring1padding }]}>
-                    <Image 
+                    <Image
                         source={require('../../assets/images/welcome.png')}
                         style={styles.logo}
                     />
                 </Animated.View>
             </Animated.View>
-            
-            {/* title and tagline */}
+
             <View style={styles.textContainer}>
                 <Text style={styles.title}>Foodi Cafe</Text>
                 <Text style={styles.tagline}>The best food in town</Text>
@@ -45,7 +52,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f59e0b',
+        backgroundColor: '#ef4444',  // Changed
         alignItems: 'center',
         justifyContent: 'center'
     },
